@@ -1,0 +1,11 @@
+name: Build database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: ./go.sh
