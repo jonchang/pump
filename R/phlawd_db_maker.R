@@ -46,6 +46,7 @@ for (i in 1:iterations) {
   labridae_df <- rbind(labridae_df, tmp_df)
 }
 
+# select and rename columns according to the SQL prompt
 names(labridae_df)[1] <- "id"
 names(labridae_df)[2] <- "ncbi_id"
 
@@ -61,5 +62,6 @@ names(labridae_filtered)[6] <- 'description'
 names(labridae_filtered)[7] <- 'title'
 names(labridae_filtered)[8] <- 'seq'
 
-## TODO: SQL Part
-
+# SQL Part
+mydb <- dbConnect(RSQLite::SQLite(), "")
+dbWriteTable(mydb, "sequences", labridae_filtered, overwrite = TRUE)
