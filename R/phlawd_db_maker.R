@@ -5,23 +5,25 @@ library(RSQLite)
 library(rentrez)
 library(XML)
 
-# historically, ids were session numbers for safety reasons
-r_search <- entrez_search(db="nuccore", term="labridae[ORGN] AND cytb[GENE]")
-r_search <- entrez_search(db="nucleotide", term="labridae[Organism] AND cytb[Gene]", retmax = r_search$count)
+# get the labridae database
+r_search <- entrez_search(db = "nuccore", term = "labridae[ORGN] AND cytb[GENE]")
+r_search <- entrez_search(db = "nucleotide", term = "labridae[Organism] AND cytb[Gene]", retmax = r_search$count)
 
-x = 200
-iterations = (r_search$count / x) + 1
-labridae_df = data.frame()
+# prepare for data fetching
+RECORDS_PER_ITERATION <- 200
+iterations <- (r_search$count / RECORDS_PER_ITERATION) + 1
+labridae_df <- data.frame()
 
+# fetch the data and wrangle the XML database
 for (i in 1:iterations) {
   print(i)
-  upload <- entrez_post(db="nucleotide", r_search$ids[x*(i-1)+1:x*i])
-  entrez_XML <- entrez_fetch(db="nucleotide", rettype="xml", retmode="xml", 
-                             web_history=upload, retmax=x, parsed=TRUE)
+  upload <- entrez_post(db = "nucleotide", r_search$ids[RECORDS_PER_ITERATION*(i-1)+1:RECORDS_PER_ITERATION*i])
+  entrez_XML <- entrez_fetch(db = "nucleotide", rettype = "xml", retmode = "xml", 
+                             web_history = upload, retmax = RECORDS_PER_ITERATION, parsed = TRUE)
   
   # extract the id
   print('extracting id...')
-  id_df <- xmlToDataFrame(entrez_XML, nodes=getNodeSet(entrez_XML, "//GBSeqid"))
+  id_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeqid"))
   id_df <- id_df[grep("gi", id_df$text),]
   id_df <- gsub("gi\\|", "", id_df)
   id_df <- as.numeric(id_df)
@@ -35,7 +37,7 @@ for (i in 1:iterations) {
   
   # get the rest of the contents
   print('extracting contents...')
-  content_df <- xmlToDataFrame(entrez_XML, nodes=getNodeSet(entrez_XML, "//GBSeq"))
+  content_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeq"))
   
   # combine three dataframes at once
   print('combining...')
