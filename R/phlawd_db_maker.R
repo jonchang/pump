@@ -4,6 +4,7 @@ library(tidyverse)
 library(RSQLite)
 library(rentrez)
 library(XML)
+library(dplyr)
 
 # get the labridae database
 r_search <- entrez_search(db = "nuccore", term = "labridae[ORGN] AND cytb[GENE]")
@@ -25,14 +26,14 @@ for (i in 1:iterations) {
   print('extracting id...')
   id_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeqid"))
   id_df <- id_df[grep("gi", id_df$text),]
-  id_df <- gsub("gi\\|", "", id_df)
+  id_df <- str_replace(id_df, "gi\\|", "")
   id_df <- as.numeric(id_df)
   id_df <- cbind(id_df, id_df)
   
   # extract the title
   print('extracting title...')
-  title_df <- xmlToDataFrame(entrez_XML, nodes=getNodeSet(entrez_XML, "//GBReference"))
-  title_df <- subset(title_df, GBReference_reference==1)
+  title_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBReference"))
+  title_df <- filter(title_df, GBReference_reference == 1)
   title_df <- title_df[, c('GBReference_title')]
   
   # get the rest of the contents
