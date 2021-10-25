@@ -60,5 +60,5 @@ names(labridae_filtered)[6] <- 'description'
 names(labridae_filtered)[7] <- 'title'
 names(labridae_filtered)[8] <- 'seq'
 
-## TO FILL IN: SQL Part
+## TODO: SQL Part
 
