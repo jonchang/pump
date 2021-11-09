@@ -62,4 +62,5 @@ names(labridae_filtered)[7] <- 'title'
 names(labridae_filtered)[8] <- 'seq'
 
 ## TODO: SQL Part
-
+mydb <- dbConnect(RSQLite::SQLite(), "")
+dbWriteTable(mydb, "sequences", labridae_filtered, overwrite = TRUE)
