@@ -15,6 +15,10 @@ RECORDS_PER_ITERATION <- 200
 iterations <- (r_search$count / RECORDS_PER_ITERATION) + 1
 labridae_df <- data.frame()
 
+# Initialize MySQL database
+mydb <- dbConnect(RSQLite::SQLite(), "")
+
+# as each batch is processed, add them into the sql database
 # fetch the data and wrangle the XML database
 for (i in 1:iterations) {
   print(i)
@@ -42,25 +46,29 @@ for (i in 1:iterations) {
   
   # combine three dataframes at once
   print('combining...')
-  tmp_df <- cbind(id_df, cbind(content_df, title_df))
-  labridae_df <- rbind(labridae_df, tmp_df)
+  labridae_df <- cbind(id_df, cbind(content_df, title_df))
+  
+  # filter database after including everything
+  print('filtering...')
+  names(labridae_df)[1] <- "id"
+  names(labridae_df)[2] <- "ncbi_id"
+  
+  batch_filtered <- labridae_df[, c('id', 'ncbi_id',
+                                    'GBSeq_locus', 'GBSeq_primary-accession', 
+                                    'GBSeq_accession-version', 'GBSeq_definition',
+                                    'title_df', 'GBSeq_sequence')]
+  
+  names(batch_filtered)[3] <- 'locus'
+  names(batch_filtered)[4] <- 'accession_id'
+  names(batch_filtered)[5] <- 'version_id'
+  names(batch_filtered)[6] <- 'description'
+  names(batch_filtered)[7] <- 'title'
+  names(batch_filtered)[8] <- 'seq'
+  
+  # add data to SQL table
+  print('adding data to SQL...')
+  dbWriteTable(mydb, "sequences", batch_filtered, append = TRUE)
 }
 
-names(labridae_df)[1] <- "id"
-names(labridae_df)[2] <- "ncbi_id"
+mydb
 
-labridae_filtered <- labridae_df[, c('id', 'ncbi_id',
-                                     'GBSeq_locus', 'GBSeq_primary-accession', 
-                                     'GBSeq_accession-version', 'GBSeq_definition',
-                                     'title_df', 'GBSeq_sequence')]
-
-names(labridae_filtered)[3] <- 'locus'
-names(labridae_filtered)[4] <- 'accession_id'
-names(labridae_filtered)[5] <- 'version_id'
-names(labridae_filtered)[6] <- 'description'
-names(labridae_filtered)[7] <- 'title'
-names(labridae_filtered)[8] <- 'seq'
-
-## TODO: SQL Part
-mydb <- dbConnect(RSQLite::SQLite(), "")
-dbWriteTable(mydb, "sequences", labridae_filtered, overwrite = TRUE)

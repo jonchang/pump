@@ -6,6 +6,8 @@ library(rentrez)
 library(glue)
 library(XML)
 library(dplyr)
+library(RSQLite)
+
 
 sqlAdd <- function(entrez_XML) {
   # extract the id
@@ -60,10 +62,15 @@ for(i in 1:length(gene_names))
 RECORDS_PER_ITERATION <- 200
 labridae_df <- data.frame()
 
+# Initialize SQL database
+mydb <- dbConnect(RSQLite::SQLite(), "")
+
+# real test is 1:length(r_search2)
 for(j in 1:1){
   print(paste("fetching ", gene_names[j]))
   iterations = (r_search2[[j]]$count / RECORDS_PER_ITERATION) + 1
   
+  # real data is 1:iterations
   for (i in 1:1) {
     print(i)
     upload <- entrez_post(db="nucleotide", r_search2[[j]]$ids[RECORDS_PER_ITERATION*(i-1)+1:RECORDS_PER_ITERATION*i])
@@ -76,6 +83,8 @@ for(j in 1:1){
     # grab those records and store it into a logfile
   }
 }
+
+# entrez_XML
 
 # DEBUG
 entrez_XML <- curr_record
