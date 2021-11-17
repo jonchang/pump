@@ -8,6 +8,25 @@ library(XML)
 library(dplyr)
 library(RSQLite)
 
+mod_cbind <- function(df1, df2, colname, new_name) {
+  i <- 1
+  j <- 1
+  
+  df1[new_name] <- NA
+  col <- df1[colname][[1]]
+  col2 <- df1[new_name][[1]]
+  
+  while (i <= length(col)) {
+    if (!is.na(col[i])) {
+      col2[i] <- df2[j]
+      j <- j + 1
+    }
+    i <- i + 1
+  }
+  
+  df1[new_name] <- col2
+  return(df1)
+}
 
 sqlAdd <- function(entrez_XML) {
   # extract the id
@@ -30,7 +49,29 @@ sqlAdd <- function(entrez_XML) {
   
   # combine three dataframes at once
   print('combining...')
-  return(cbind(id_df, cbind(content_df, title_df)))
+  mid_df <- mod_cbind(content_df, title_df, "GBSeq_references", "title")
+  labridae_df <- cbind(id_df, mid_df)
+  
+  # filter database after including everything
+  print('filtering...')
+  names(labridae_df)[1] <- "id"
+  names(labridae_df)[2] <- "ncbi_id"
+  
+  batch_filtered <- labridae_df[, c('id', 'ncbi_id',
+                                    'GBSeq_locus', 'GBSeq_primary-accession', 
+                                    'GBSeq_accession-version', 'GBSeq_definition',
+                                    'title', 'GBSeq_sequence')]
+  
+  names(batch_filtered)[3] <- 'locus'
+  names(batch_filtered)[4] <- 'accession_id'
+  names(batch_filtered)[5] <- 'version_id'
+  names(batch_filtered)[6] <- 'description'
+  names(batch_filtered)[7] <- 'title'
+  names(batch_filtered)[8] <- 'seq'
+  
+  # add data to SQL table
+  print('adding data to SQL...')
+  dbWriteTable(mydb, "sequences", batch_filtered, append = TRUE)
 }
 
 gene_names <- c("12s", "16s", "4c4", "coi", "cytb", "enc1", "ficd", "glyt", "hoxc6a", "kiaa1239", "myh6", "panx2", "plagl2", "ptr", "rag1", "rag2", "rhodopsin", "ripk4", "sh3px3", "sidkey", "sreb2", "svep1", "tbr1", "vcpip", "zic1")
@@ -60,31 +101,32 @@ for(i in 1:length(gene_names))
 }
 
 RECORDS_PER_ITERATION <- 200
-labridae_df <- data.frame()
 
 # Initialize SQL database
 mydb <- dbConnect(RSQLite::SQLite(), "")
 
 # real test is 1:length(r_search2)
-for(j in 1:1){
+for(j in 1:length(r_search2)){
   print(paste("fetching ", gene_names[j]))
   iterations = (r_search2[[j]]$count / RECORDS_PER_ITERATION) + 1
   
   # real data is 1:iterations
-  for (i in 1:1) {
+  for (i in 1:iterations) {
     print(i)
     upload <- entrez_post(db="nucleotide", r_search2[[j]]$ids[RECORDS_PER_ITERATION*(i-1)+1:RECORDS_PER_ITERATION*i])
     curr_record <- entrez_fetch(db="nucleotide", rettype="xml", retmode = "xml", web_history=upload,
                                retmax=RECORDS_PER_ITERATION, parsed = TRUE)
-    tmp_df <- sqlAdd(curr_record)
-    labridae_df <- rbind(labridae_df, tmp_df)
+    sqlAdd(curr_record)
     
     # TODO: catch any invalid records
     # grab those records and store it into a logfile
   }
 }
 
+data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
+
 # entrez_XML
+# title_df[1]
 
 # DEBUG
 entrez_XML <- curr_record
@@ -107,18 +149,3 @@ print('extracting contents...')
 content_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeq"))
 
 # END DEBUG
-
-names(labridae_df)[1] <- "id"
-names(labridae_df)[2] <- "ncbi_id"
-
-labridae_filtered <- labridae_df[, c('id', 'ncbi_id',
-                                     'GBSeq_locus', 'GBSeq_primary-accession', 
-                                     'GBSeq_accession-version', 'GBSeq_definition',
-                                     'title_df', 'GBSeq_sequence')]
-
-names(labridae_filtered)[3] <- 'locus'
-names(labridae_filtered)[4] <- 'accession_id'
-names(labridae_filtered)[5] <- 'version_id'
-names(labridae_filtered)[6] <- 'description'
-names(labridae_filtered)[7] <- 'title'
-names(labridae_filtered)[8] <- 'seq'

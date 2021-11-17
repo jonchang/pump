@@ -13,7 +13,6 @@ r_search <- entrez_search(db = "nucleotide", term = "labridae[Organism] AND cytb
 # prepare for data fetching
 RECORDS_PER_ITERATION <- 200
 iterations <- (r_search$count / RECORDS_PER_ITERATION) + 1
-labridae_df <- data.frame()
 
 # Initialize MySQL database
 mydb <- dbConnect(RSQLite::SQLite(), "")
@@ -70,5 +69,5 @@ for (i in 1:iterations) {
   dbWriteTable(mydb, "sequences", batch_filtered, append = TRUE)
 }
 
-mydb
+data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
 
