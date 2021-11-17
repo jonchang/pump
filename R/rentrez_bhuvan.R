@@ -124,28 +124,3 @@ for(j in 1:length(r_search2)){
 }
 
 data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
-
-# entrez_XML
-# title_df[1]
-
-# DEBUG
-entrez_XML <- curr_record
-
-print('extracting id...')
-id_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeqid"))
-id_df <- id_df[grep("gi", id_df$text),]
-id_df <- str_replace(id_df, "gi\\|", "")
-id_df <- as.numeric(id_df)
-id_df <- cbind(id_df, id_df)
-
-# extract the title
-print('extracting title...')
-title_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBReference"))
-title_df <- filter(title_df, GBReference_reference == 1)
-title_df <- title_df[, c('GBReference_title')]
-
-# get the rest of the contents
-print('extracting contents...')
-content_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeq"))
-
-# END DEBUG
