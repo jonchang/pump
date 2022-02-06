@@ -7,7 +7,13 @@ library(glue)
 library(XML)
 library(dplyr)
 library(RSQLite)
+library(rio)
 
+# change these variables so it fits with your computer
+pump_dir <- "./UCLA/Research/pump"   # filepath to the pump repository
+
+
+# functions
 mod_cbind <- function(df1, df2, colname, new_name) {
   i <- 1
   j <- 1
@@ -46,11 +52,13 @@ sqlAdd <- function(entrez_XML) {
   # get the rest of the contents
   print('extracting contents...')
   content_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeq"))
+  tax_df <- content_df[, c('GBSeq_organism', 'GBSeq_taxonomy')]
   
   # combine three dataframes at once
   print('combining...')
   mid_df <- mod_cbind(content_df, title_df, "GBSeq_references", "title")
   labridae_df <- cbind(id_df, mid_df)
+  tax_df <- cbind(id_df, tax_df)
   
   # filter database after including everything
   print('filtering...')
@@ -69,9 +77,15 @@ sqlAdd <- function(entrez_XML) {
   names(batch_filtered)[7] <- 'title'
   names(batch_filtered)[8] <- 'seq'
   
+  names(tax_df)[1] <- "id"
+  names(tax_df)[2] <- "ncbi_id"
+  names(tax_df)[3] <- "organism"
+  names(tax_df)[4] <- "taxonomy"
+  
   # add data to SQL table
   print('adding data to SQL...')
   dbWriteTable(mydb, "sequences", batch_filtered, append = TRUE)
+  dbWriteTable(taxdb, "taxonomy", tax_df, append = TRUE)
 }
 
 gene_names <- c("12s", "16s", "4c4", "coi", "cytb", "enc1", "ficd", "glyt", "hoxc6a", "kiaa1239", "myh6", "panx2", "plagl2", "ptr", "rag1", "rag2", "rhodopsin", "ripk4", "sh3px3", "sidkey", "sreb2", "svep1", "tbr1", "vcpip", "zic1")
@@ -104,6 +118,7 @@ RECORDS_PER_ITERATION <- 200
 
 # Initialize SQL database
 mydb <- dbConnect(RSQLite::SQLite(), "")
+taxdb <- dbConnect(RSQLite::SQLite(), "")
 
 # real test is 1:length(r_search2)
 for(j in 1:length(r_search2)){
@@ -120,7 +135,20 @@ for(j in 1:length(r_search2)){
     
     # TODO: catch any invalid records
     # grab those records and store it into a logfile
+    # apparently, we haven't found any invalid records yet.
   }
 }
 
+# extract sql information
 data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
+tax_sql <- dbGetQuery(taxdb, 'SELECT * FROM taxonomy')
+
+# DEBUG
+# content_df <- xmlToDataFrame(curr_record, nodes = getNodeSet(curr_record, "//GBSeq"))
+
+# export sql
+curr_dir <- getwd()
+setwd(pump_dir)
+write.csv(data_sql,"sequences.csv", row.names = FALSE)
+write.csv(tax_sql,"taxonomy.csv", row.names = FALSE)
+setwd(curr_dir)
