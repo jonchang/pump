@@ -1,5 +1,6 @@
 # install.packages("rentrez")
 # install.packages("glue")
+# install.packages("RSQLite")
 
 library(tidyverse)
 library(rentrez)
@@ -7,7 +8,6 @@ library(glue)
 library(XML)
 library(dplyr)
 library(RSQLite)
-library(rio)
 
 # change these variables so it fits with your computer
 pump_dir <- "./UCLA/Research/pump"   # filepath to the pump repository
@@ -88,6 +88,7 @@ sqlAdd <- function(entrez_XML) {
   dbWriteTable(taxdb, "taxonomy", tax_df, append = TRUE)
 }
 
+# search for fish entries
 gene_names <- c("12s", "16s", "4c4", "coi", "cytb", "enc1", "ficd", "glyt", "hoxc6a", "kiaa1239", "myh6", "panx2", "plagl2", "ptr", "rag1", "rag2", "rhodopsin", "ripk4", "sh3px3", "sidkey", "sreb2", "svep1", "tbr1", "vcpip", "zic1")
 r_search1 <- list()
 r_search2 <- list()
@@ -114,12 +115,14 @@ for(i in 1:length(gene_names))
   }
 }
 
+# Set number of records per iteration
 RECORDS_PER_ITERATION <- 200
 
 # Initialize SQL database
 mydb <- dbConnect(RSQLite::SQLite(), "")
 taxdb <- dbConnect(RSQLite::SQLite(), "")
 
+# Fetch and add fish entries to SQL
 # real test is 1:length(r_search2)
 for(j in 1:length(r_search2)){
   print(paste("fetching ", gene_names[j]))
@@ -139,14 +142,14 @@ for(j in 1:length(r_search2)){
   }
 }
 
-# extract sql information
+# Extract sql information
 data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
 tax_sql <- dbGetQuery(taxdb, 'SELECT * FROM taxonomy')
 
 # DEBUG
 # content_df <- xmlToDataFrame(curr_record, nodes = getNodeSet(curr_record, "//GBSeq"))
 
-# export sql
+# Export sql
 curr_dir <- getwd()
 setwd(pump_dir)
 write.csv(data_sql,"sequences.csv", row.names = FALSE)
