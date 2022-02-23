@@ -14,7 +14,8 @@ pump_dir <- "./UCLA/Research/pump"   # filepath to the pump repository
 
 
 # functions
-mod_cbind <- function(df1, df2, colname, new_name) {
+# join two columns while keeping NA entries
+cbind_with_na <- function(df1, df2, colname, new_name) {
   i <- 1
   j <- 1
   
@@ -56,7 +57,7 @@ sqlAdd <- function(entrez_XML) {
   
   # combine three dataframes at once
   print('combining...')
-  mid_df <- mod_cbind(content_df, title_df, "GBSeq_references", "title")
+  mid_df <- cbind_with_na(content_df, title_df, "GBSeq_references", "title")
   labridae_df <- cbind(id_df, mid_df)
   tax_df <- cbind(id_df, tax_df)
   
@@ -79,8 +80,14 @@ sqlAdd <- function(entrez_XML) {
   
   names(tax_df)[1] <- "id"
   names(tax_df)[2] <- "ncbi_id"
-  names(tax_df)[3] <- "organism"
+  names(tax_df)[3] <- "name"
   names(tax_df)[4] <- "taxonomy"
+  # names(tax_df)[4] <- "name_class"
+  # names(tax_df)[5] <- "node_rank"
+  # names(tax_df)[6] <- "parent_ncbi_id"
+  # names(tax_df)[7] <- "edited_name"
+  # names(tax_df)[8] <- "left_value"
+  # names(tax_df)[9] <- "right_value"
   
   # add data to SQL table
   print('adding data to SQL...')
@@ -89,24 +96,47 @@ sqlAdd <- function(entrez_XML) {
 }
 
 # search for fish entries
+# anything with vrt?
 gene_names <- c("12s", "16s", "4c4", "coi", "cytb", "enc1", "ficd", "glyt", "hoxc6a", "kiaa1239", "myh6", "panx2", "plagl2", "ptr", "rag1", "rag2", "rhodopsin", "ripk4", "sh3px3", "sidkey", "sreb2", "svep1", "tbr1", "vcpip", "zic1")
 r_search1 <- list()
 r_search2 <- list()
+
+# search for actinopterygii, not labridae
 search_term_frame = "labridae[Organism] AND "
+
 
 for(i in 1:length(gene_names))
 {
+  # append search terms
   r_glue <-  glue("{search_term_frame}{gene_names[i]}[Gene]")
   r_glue2 <-  glue("{search_term_frame}{gene_names[i]}")
   print(r_glue)
+  
+  # rentrez search nucleotides
   r_search1[[i]] <- entrez_search(db="nucleotide", term = r_glue)
   r_search2[[i]] <- entrez_search(db="nucleotide", term = r_glue, retmax = r_search1[[i]]$count)
-  r_search1
+  
   if(r_search1[[i]]$count == 0)
   {
-    print("search had 0 results, researching without gene field")
+    print("nucleotide search had 0 results, researching without gene field")
     r_search1[[i]] <- entrez_search(db="nucleotide", term = r_glue2)
     r_search2[[i]] <- entrez_search(db="nucleotide", term = r_glue2, retmax = r_search1[[i]]$count)
+    print(r_search2[[i]]$count)
+  }
+  else
+  {
+    print(r_search2[[i]]$count)
+  }
+  
+  # rentrez search taxonomy
+  r_search_tax1[[i]] <- entrez_search(db="nucleotide", term = r_glue)
+  r_search_tax2[[i]] <- entrez_search(db="nucleotide", term = r_glue, retmax = r_search1[[i]]$count)
+  
+  if(r_search_tax1[[i]]$count == 0)
+  {
+    print("taxonomy search had 0 results, researching without gene field")
+    r_search_tax1[[i]] <- entrez_search(db="nucleotide", term = r_glue2)
+    r_search_tax2[[i]] <- entrez_search(db="nucleotide", term = r_glue2, retmax = r_search1[[i]]$count)
     print(r_search2[[i]]$count)
   }
   else
@@ -146,12 +176,11 @@ for(j in 1:length(r_search2)){
 data_sql <- dbGetQuery(mydb, 'SELECT * FROM sequences')
 tax_sql <- dbGetQuery(taxdb, 'SELECT * FROM taxonomy')
 
-# DEBUG
-# content_df <- xmlToDataFrame(curr_record, nodes = getNodeSet(curr_record, "//GBSeq"))
-
 # Export sql
 curr_dir <- getwd()
 setwd(pump_dir)
 write.csv(data_sql,"sequences.csv", row.names = FALSE)
 write.csv(tax_sql,"taxonomy.csv", row.names = FALSE)
 setwd(curr_dir)
+
+# phlawd_db_maker vrt vrt.db
