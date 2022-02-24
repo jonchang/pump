@@ -10,90 +10,13 @@ library(dplyr)
 library(RSQLite)
 
 # change these variables so it fits with your computer
-pump_dir <- "./UCLA/Research/pump"   # filepath to the pump repository
+pump_dir <- "Documents/UCLA/Research/pump"   # filepath to the pump repository
 
-
-# functions
-# join two columns while keeping NA entries
-cbind_with_na <- function(df1, df2, colname, new_name) {
-  i <- 1
-  j <- 1
-  
-  df1[new_name] <- NA
-  col <- df1[colname][[1]]
-  col2 <- df1[new_name][[1]]
-  
-  while (i <= length(col)) {
-    if (!is.na(col[i])) {
-      col2[i] <- df2[j]
-      j <- j + 1
-    }
-    i <- i + 1
-  }
-  
-  df1[new_name] <- col2
-  return(df1)
-}
-
-sqlAdd <- function(entrez_XML) {
-  # extract the id
-  print('extracting id...')
-  id_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeqid"))
-  id_df <- id_df[grep("gi", id_df$text),]
-  id_df <- str_replace(id_df, "gi\\|", "")
-  id_df <- as.numeric(id_df)
-  id_df <- cbind(id_df, id_df)
-  
-  # extract the title
-  print('extracting title...')
-  title_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBReference"))
-  title_df <- filter(title_df, GBReference_reference == 1)
-  title_df <- title_df[, c('GBReference_title')]
-  
-  # get the rest of the contents
-  print('extracting contents...')
-  content_df <- xmlToDataFrame(entrez_XML, nodes = getNodeSet(entrez_XML, "//GBSeq"))
-  tax_df <- content_df[, c('GBSeq_organism', 'GBSeq_taxonomy')]
-  
-  # combine three dataframes at once
-  print('combining...')
-  mid_df <- cbind_with_na(content_df, title_df, "GBSeq_references", "title")
-  labridae_df <- cbind(id_df, mid_df)
-  tax_df <- cbind(id_df, tax_df)
-  
-  # filter database after including everything
-  print('filtering...')
-  names(labridae_df)[1] <- "id"
-  names(labridae_df)[2] <- "ncbi_id"
-  
-  batch_filtered <- labridae_df[, c('id', 'ncbi_id',
-                                    'GBSeq_locus', 'GBSeq_primary-accession', 
-                                    'GBSeq_accession-version', 'GBSeq_definition',
-                                    'title', 'GBSeq_sequence')]
-  
-  names(batch_filtered)[3] <- 'locus'
-  names(batch_filtered)[4] <- 'accession_id'
-  names(batch_filtered)[5] <- 'version_id'
-  names(batch_filtered)[6] <- 'description'
-  names(batch_filtered)[7] <- 'title'
-  names(batch_filtered)[8] <- 'seq'
-  
-  names(tax_df)[1] <- "id"
-  names(tax_df)[2] <- "ncbi_id"
-  names(tax_df)[3] <- "name"
-  names(tax_df)[4] <- "taxonomy"
-  # names(tax_df)[4] <- "name_class"
-  # names(tax_df)[5] <- "node_rank"
-  # names(tax_df)[6] <- "parent_ncbi_id"
-  # names(tax_df)[7] <- "edited_name"
-  # names(tax_df)[8] <- "left_value"
-  # names(tax_df)[9] <- "right_value"
-  
-  # add data to SQL table
-  print('adding data to SQL...')
-  dbWriteTable(mydb, "sequences", batch_filtered, append = TRUE)
-  dbWriteTable(taxdb, "taxonomy", tax_df, append = TRUE)
-}
+# load functions
+curr_dir <- getwd()
+setwd(paste(pump_dir, "/R", sep=""))
+source("phlawd-helper.R")
+setwd(curr_dir)
 
 # search for fish entries
 # anything with vrt?
@@ -104,7 +27,7 @@ r_search2 <- list()
 # search for actinopterygii, not labridae
 search_term_frame = "labridae[Organism] AND "
 
-
+# fill in search logs
 for(i in 1:length(gene_names))
 {
   # append search terms
@@ -112,7 +35,7 @@ for(i in 1:length(gene_names))
   r_glue2 <-  glue("{search_term_frame}{gene_names[i]}")
   print(r_glue)
   
-  # rentrez search nucleotides
+  # rentrez search
   r_search1[[i]] <- entrez_search(db="nucleotide", term = r_glue)
   r_search2[[i]] <- entrez_search(db="nucleotide", term = r_glue, retmax = r_search1[[i]]$count)
   
@@ -121,22 +44,6 @@ for(i in 1:length(gene_names))
     print("nucleotide search had 0 results, researching without gene field")
     r_search1[[i]] <- entrez_search(db="nucleotide", term = r_glue2)
     r_search2[[i]] <- entrez_search(db="nucleotide", term = r_glue2, retmax = r_search1[[i]]$count)
-    print(r_search2[[i]]$count)
-  }
-  else
-  {
-    print(r_search2[[i]]$count)
-  }
-  
-  # rentrez search taxonomy
-  r_search_tax1[[i]] <- entrez_search(db="nucleotide", term = r_glue)
-  r_search_tax2[[i]] <- entrez_search(db="nucleotide", term = r_glue, retmax = r_search1[[i]]$count)
-  
-  if(r_search_tax1[[i]]$count == 0)
-  {
-    print("taxonomy search had 0 results, researching without gene field")
-    r_search_tax1[[i]] <- entrez_search(db="nucleotide", term = r_glue2)
-    r_search_tax2[[i]] <- entrez_search(db="nucleotide", term = r_glue2, retmax = r_search1[[i]]$count)
     print(r_search2[[i]]$count)
   }
   else
@@ -156,15 +63,30 @@ taxdb <- dbConnect(RSQLite::SQLite(), "")
 # real test is 1:length(r_search2)
 for(j in 1:length(r_search2)){
   print(paste("fetching ", gene_names[j]))
-  iterations = (r_search2[[j]]$count / RECORDS_PER_ITERATION) + 1
+  iterations = as.integer((r_search2[[j]]$count / RECORDS_PER_ITERATION) + 1)
   
   # real data is 1:iterations
   for (i in 1:iterations) {
-    print(i)
+    print(paste(i, "of", iterations, "iterations"))
+    
+    # fetch records for sequence data
+    print("fetching sequence data...")
     upload <- entrez_post(db="nucleotide", r_search2[[j]]$ids[RECORDS_PER_ITERATION*(i-1)+1:RECORDS_PER_ITERATION*i])
     curr_record <- entrez_fetch(db="nucleotide", rettype="xml", retmode = "xml", web_history=upload,
+                                retmax=RECORDS_PER_ITERATION, parsed = TRUE)
+    
+    # fetch records for taxonomy data
+    print("obtaining taxonomy ids...")
+    tax_ids <- get_tax_ids(curr_record)
+    
+    print("fetching taxonomy data...")
+    tax_upload <- entrez_post(db="taxonomy", tax_ids)
+    tax_record <- entrez_fetch(db="taxonomy", rettype="xml", retmode = "xml", web_history=tax_upload,
                                retmax=RECORDS_PER_ITERATION, parsed = TRUE)
-    sqlAdd(curr_record)
+    
+    # build sql tables
+    sqlAdd(curr_record, tax_record)
+    cat("\n")
     
     # TODO: catch any invalid records
     # grab those records and store it into a logfile
@@ -182,5 +104,3 @@ setwd(pump_dir)
 write.csv(data_sql,"sequences.csv", row.names = FALSE)
 write.csv(tax_sql,"taxonomy.csv", row.names = FALSE)
 setwd(curr_dir)
-
-# phlawd_db_maker vrt vrt.db
